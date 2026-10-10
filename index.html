@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coffee Lake - Local Prototype</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #e0e0e0; margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        
+        .app-container {
+            width: 100%; max-width: 410px; height: 780px; background-color: #d1d8d0;
+            border: 10px solid #222; border-radius: 35px; display: flex; flex-direction: column; 
+            overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.3); position: relative;
+        }
+
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background-color: #c0d8b8; border-bottom: 2px solid #a3c49a; }
+        .header-title { font-size: 20px; font-weight: bold; font-style: italic; color: #1a3311; display: flex; align-items: center; gap: 5px; }
+        .icon-btn { background: none; border: none; font-size: 20px; cursor: pointer; }
+
+        .screen { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; }
+
+        .search-bar { width: 100%; padding: 8px 12px; border-radius: 15px; border: 1px solid #777; background: #fff; font-size: 13px; margin-bottom: 12px; outline: none; }
+
+        .category-block { background-color: #c0d8b8; border: 2px solid #4a6b40; border-radius: 8px; padding: 10px; margin-bottom: 12px; }
+        .category-title { font-size: 16px; font-weight: bold; margin-bottom: 8px; color: #1a3311; }
+        .menu-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px dashed #7a9c6f; font-size: 13px; }
+        .add-btn { background: #fff; border: 1px solid #e74c3c; color: #e74c3c; border-radius: 50%; width: 24px; height: 24px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+        .order-card { background: #fff; border-radius: 5px; padding: 10px; border: 1px solid #999; font-size: 12px; margin-bottom: 10px; }
+        .order-title { text-align: center; font-weight: bold; font-size: 14px; border-bottom: 1px solid #222; padding-bottom: 5px; margin-bottom: 8px; }
+        .order-table { width: 100%; border-collapse: collapse; }
+        .order-table td { padding: 4px 0; }
+
+        .loyalty-card { background-color: #27ae60; border-radius: 10px; padding: 10px; margin-bottom: 10px; color: #fff; }
+        .stamps-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; justify-items: center; margin-top: 8px; }
+        .stamp { width: 28px; height: 28px; background: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #333; font-size: 14px; }
+        .stamp.filled { background: #d4ac0d; color: #fff; }
+
+        .status-box { background: #d8e4d3; border: 1px solid #666; border-radius: 5px; padding: 8px; font-size: 11px; margin-bottom: 10px; }
+        .status-step { margin: 3px 0; color: #777; }
+        .status-step.active { color: #000; font-weight: bold; }
+
+        .pay-btn { width: 100%; background: #e74c3c; color: white; border: none; padding: 12px; font-weight: bold; font-size: 16px; border-radius: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="header">
+        <div class="header-title"><span>👤</span> Coffee Lake</div>
+        <button class="icon-btn" onclick="toggleScreen()" id="navBtn">🛒</button>
+    </div>
+
+    <!-- ЭКРАН 1: МЕНЮ И ПОИСК -->
+    <div id="menuScreen" class="screen">
+        <input type="text" id="searchInput" class="search-bar" placeholder="🔍 search menu..." oninput="handleSearch()">
+        <div id="menuContainer">Загрузка меню...</div>
+    </div>
+
+    <!-- ЭКРАН 2: КОРЗИНА И ОПЛАТА -->
+    <div id="orderScreen" class="screen" style="display: none;">
+        <h3 style="text-align: center; margin: 5px 0;">YOUR ORDER</h3>
+        
+        <div class="order-card">
+            <div class="order-title" id="orderHeader">ORDER PREVIEW</div>
+            <table class="order-table" id="cartTable">
+                <tr><td colspan="2" align="center">Корзина пуста</td></tr>
+            </table>
+        </div>
+
+        <div class="loyalty-card">
+            <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 12px;">
+                <span>AITU</span><span>GIFT CARD</span>
+            </div>
+            <div class="stamps-grid">
+                <div class="stamp filled">☕</div>
+                <div class="stamp"></div><div class="stamp"></div><div class="stamp"></div>
+                <div class="stamp"></div><div class="stamp"></div><div class="stamp">🎁</div>
+            </div>
+        </div>
+
+        <div class="status-box">
+            <div class="status-step active" id="st1">☑ Order created</div>
+            <div class="status-step" id="st2">☐ Paid (Kaspi Gold)</div>
+            <div class="status-step" id="st3">☐ Preparing in progress</div>
+            <div class="status-step" id="st4">☐ Ready for picking up</div>
+        </div>
+
+        <button class="pay-btn" onclick="submitOrder()">PAY</button>
+    </div>
+</div>
+
+<script>
+    let currentCart = [];
+    let currentTotal = 0;
+    let searchTimeout = null;
+
+    window.onload = function() {
+        fetchMenu();
+    };
+
+    async function fetchMenu(searchQuery = '') {
+        try {
+            const url = searchQuery ? `/api/menu?search=${encodeURIComponent(searchQuery)}` : '/api/menu';
+            const res = await fetch(url);
+            const data = await res.json();
+            if (data.success) renderMenu(data.data);
+        } catch (err) { console.error(err); }
+    }
+
+    function handleSearch() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            fetchMenu(document.getElementById('searchInput').value);
+        }, 300);
+    }
+
+    function renderMenu(items) {
+        const container = document.getElementById('menuContainer');
+        container.innerHTML = '';
+        const categories = {};
+        items.forEach(item => {
+            if (!categories[item.category_name]) categories[item.category_name] = [];
+            categories[item.category_name].push(item);
+        });
+
+        for (const [catName, catItems] of Object.entries(categories)) {
+            let html = `<div class="category-block"><div class="category-title">☕ ${catName}:</div>`;
+            catItems.forEach(item => {
+                html += `
+                    <div class="menu-row">
+                        <div><strong>${item.name}</strong> ${item.volume_ml ? `(${item.volume_ml}ml)` : ''} - <strong>${item.price_kzt}tg</strong></div>
+                        <button class="add-btn" onclick="addToCart(${item.item_id}, '${item.name}', ${item.price_kzt})">+</button>
+                    </div>`;
+            });
+            html += `</div>`;
+            container.innerHTML += html;
+        }
+    }
+
+    function addToCart(id, name, price) {
+        currentCart.push({ itemId: id, name, price: parseFloat(price) });
+        currentTotal += parseFloat(price);
+        alert(`Добавлено в корзину: ${name}`);
+    }
+
+    function toggleScreen() {
+        const menuScr = document.getElementById('menuScreen');
+        const orderScr = document.getElementById('orderScreen');
+        const navBtn = document.getElementById('navBtn');
+
+        if (menuScr.style.display === 'none') {
+            menuScr.style.display = 'flex';
+            orderScr.style.display = 'none';
+            navBtn.innerText = '🛒';
+        } else {
+            menuScr.style.display = 'none';
+            orderScr.style.display = 'flex';
+            navBtn.innerText = '🏠';
+            updateOrderView();
+        }
+    }
+
+    function updateOrderView() {
+        const table = document.getElementById('cartTable');
+        if (currentCart.length > 0) {
+            let rowsHtml = '';
+            currentCart.forEach(item => {
+                rowsHtml += `<tr><td>${item.name}</td><td align="right">${item.price}tg</td></tr>`;
+            });
+            rowsHtml += `<tr><td colspan="2"><hr></td></tr><tr><td><strong>Total:</strong></td><td align="right"><strong>${currentTotal}tg</strong></td></tr>`;
+            table.innerHTML = rowsHtml;
+        }
+    }
+
+    // АВТОМАТИЧЕСКОЕ ИЗМЕНЕНИЕ СТАТУСОВ ПРИ НАЖАТИИ НА КНОПКУ PAY
+    async function submitOrder() {
+    if (currentCart.length === 0) { 
+        alert('Корзина пуста'); 
+        return; 
+    }
+    
+    // Сразу меняем заголовок и показываем первый статус, чтобы кнопка визуально реагировала
+    document.getElementById('orderHeader').innerText = `ORDER #${Math.floor(1000 + Math.random() * 9000)}`;
+    document.getElementById('st2').className = 'status-step active';
+    document.getElementById('st2').innerText = '☑ Paid (Kaspi Gold)';
+    
+    alert('Оплата прошла успешно! Заказ принят в работу.');
+
+    // Пытаемся отправить данные на сервер (если сервер не запущен, сайт все равно продолжит работать для прототипа)
+    try {
+        await fetch('/api/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: 1, items: currentCart, totalPrice: currentTotal })
+        });
+    } catch (err) {
+        console.log('Сервер не отвечает, но интерфейс работает локально:', err);
+    }
+
+    // Автоматический переход в статус "Preparing" через 1.5 секунды
+    setTimeout(() => {
+        const st3 = document.getElementById('st3');
+        st3.className = 'status-step active';
+        st3.innerText = '☑ Preparing in progress';
+    }, 1500);
+
+    // Автоматический переход в статус "Ready" через 4 секунды
+    setTimeout(() => {
+        const st4 = document.getElementById('st4');
+        st4.className = 'status-step active';
+        st4.innerText = '☑ Ready for picking up!';
+        alert('Ваш заказ готов! Можете забирать в Coffee Lake.');
+    }, 4000);
+}
+</script>
+</body>
+</html>
