@@ -18,7 +18,7 @@ const pool = new Pool(
               user: 'postgres',
               host: 'localhost',
               database: 'coffeelake_db',
-              password: 'ВАШ_ЛОКАЛЬНЫЙ_ПАРОЛЬ',
+              password: 'ICTP',
               port: 5432,
           }
 );
